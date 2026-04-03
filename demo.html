@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZeroSounds — ZeroByes Deterministic Audio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #05080f;
+    --bg2:       #0b1120;
+    --bg3:       #101828;
+    --border:    #1a2540;
+    --border2:   #243050;
+    --text:      #c8d6ef;
+    --muted:     #3d5070;
+    --accent:    #7c6cfa;
+    --accent2:   #a78bfa;
+    --green:     #34d399;
+    --orange:    #fb923c;
+    --red:       #f87171;
+    --mono:      'Space Mono', monospace;
+    --sans:      'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCANLINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(5,8,15,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: var(--sans);
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: -0.5px;
+    color: #fff;
+  }
+  .logo span { color: var(--accent2); }
+
+  .header-seed {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .seed-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .seed-value {
+    font-size: 16px;
+    color: var(--accent2);
+    letter-spacing: 2px;
+    font-family: var(--mono);
+    transition: color 0.2s;
+  }
+  .seed-value.flash { color: var(--green); }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    min-height: calc(100vh - 64px);
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+  }
+
+  .main {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── PANELS ── */
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .panel-title {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── SLIDERS ── */
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border2);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent2);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:active { transform: scale(1.3); }
+
+  .slider-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  /* ── SEED CONTROL ── */
+  .seed-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .seed-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 8px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .seed-input:focus { border-color: var(--accent); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid;
+    border-radius: 5px;
+    padding: 8px 12px;
+    transition: all 0.1s;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border2);
+    color: var(--muted);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent2); }
+
+  .btn-accent {
+    background: rgba(124,108,250,0.12);
+    border-color: var(--accent);
+    color: var(--accent2);
+    width: 100%;
+    padding: 11px;
+  }
+  .btn-accent:hover { background: rgba(124,108,250,0.22); }
+  .btn-accent:active { transform: scale(0.97); }
+
+  .btn-green {
+    background: rgba(52,211,153,0.08);
+    border-color: rgba(52,211,153,0.4);
+    color: var(--green);
+    width: 100%;
+    padding: 11px;
+  }
+  .btn-green:hover { background: rgba(52,211,153,0.15); }
+
+  /* ── PATCH INFO ── */
+  .patch-info {
+    margin-top: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 10px;
+  }
+  .patch-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    margin-bottom: 4px;
+    color: var(--muted);
+  }
+  .patch-val { color: var(--accent2); font-family: var(--mono); }
+
+  /* ── VERIFY TABLE ── */
+  .verify-list {
+    margin-top: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+  .verify-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .verify-row:last-child { border-bottom: none; }
+  .v-pass { color: var(--green); }
+  .v-fail { color: var(--red); }
+
+  /* ── CATEGORY FILTER ── */
+  .cat-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .cat-btn {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .cat-btn:hover { color: var(--text); border-color: var(--border2); }
+  .cat-btn.active {
+    background: rgba(124,108,250,0.15);
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+
+  /* ── SOUND GRID ── */
+  .sound-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 8px;
+  }
+
+  .sound-btn {
+    background: rgba(11,17,32,0.8);
+    border: 1px solid;
+    border-radius: 7px;
+    padding: 12px 10px;
+    cursor: pointer;
+    text-align: left;
+    position: relative;
+    transition: all 0.07s ease;
+    font-family: var(--mono);
+    overflow: hidden;
+  }
+  .sound-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, currentColor 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .sound-btn:hover::before { opacity: 0.04; }
+  .sound-btn.active::before { opacity: 0.08; }
+
+  .sound-btn:active { transform: scale(0.95); }
+
+  .s-label {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 7px;
+    color: var(--text);
+    transition: color 0.1s;
+  }
+  .sound-btn.active .s-label { color: inherit; }
+
+  .s-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8px;
+    margin-bottom: 2px;
+    color: var(--muted);
+  }
+  .s-cat { font-weight: 700; }
+
+  .s-wave {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8px;
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  .arp-badge {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    font-size: 7px;
+    letter-spacing: 1px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: 700;
+  }
+
+  /* Ripple on click */
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    width: 10px;
+    height: 10px;
+    background: rgba(255,255,255,0.3);
+    animation: rippleAnim 0.4s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes rippleAnim {
+    to { transform: scale(20); opacity: 0; }
+  }
+
+  /* ── ZB LAWS FOOTER ── */
+  .laws-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .law-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .law-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.3;
+  }
+  .law-name {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent2);
+    margin-bottom: 5px;
+  }
+  .law-desc {
+    font-size: 8px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* ── PARAMS DUMP ── */
+  .param-dump {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 10px;
+    max-height: 180px;
+    overflow-y: auto;
+    margin-top: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+  .param-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .param-row:last-child { border-bottom: none; }
+  .p-key { color: var(--muted); }
+  .p-val { color: var(--text); }
+  .p-val.highlight { color: var(--accent2); }
+
+  /* ── HINT TEXT ── */
+  .hint {
+    font-size: 9px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  /* ── WAVEFORM CANVAS ── */
+  #waveCanvas {
+    width: 100%;
+    height: 60px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    display: block;
+  }
+
+  /* ── SEED MORPH INDICATOR ── */
+  .morph-bar {
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, var(--accent), var(--green), var(--orange));
+    margin-top: 8px;
+    opacity: 0.5;
+    transition: opacity 0.3s;
+  }
+
+  .param-val-display {
+    font-size: 10px;
+    color: var(--accent2);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* ── SCROLLBARS ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* ── ANIMATE-IN ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .sound-btn { animation: fadeUp 0.3s ease both; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+    .laws-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ZERO<span>SOUNDS</span></div>
+  <div class="header-seed">
+    <span class="seed-label">World Seed</span>
+    <span class="seed-value" id="headerSeed">0x1337BEEF</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- World Seed -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot" style="background:#a78bfa"></span>
+        World Seed
+      </div>
+      <p class="hint">Morphs the entire 33-sound library coherently. One value → all sounds shift together.</p>
+      <div class="slider-row">
+        <span>0x00000000</span>
+        <span>0xFFFFFFFF</span>
+      </div>
+      <input type="range" id="worldSeedSlider" min="0" max="4294967295" step="1337" value="322371311">
+      <div class="morph-bar" id="morphBar"></div>
+      <div class="seed-row">
+        <input type="text" class="seed-input" id="seedHexInput" value="0x1337BEEF" spellcheck="false">
+        <button class="btn btn-ghost" onclick="randomizeSeed()" style="white-space:nowrap">RND SEED</button>
+      </div>
+    </div>
+
+    <!-- Volume -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot" style="background:#34d399"></span>
+        Master Volume
+      </div>
+      <input type="range" id="volSlider" min="0" max="1" step="0.01" value="0.55">
+      <div class="param-val-display" id="volDisplay">55%</div>
+    </div>
+
+    <!-- Waveform Scope -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot" style="background:#fb923c"></span>
+        Oscilloscope
+      </div>
+      <canvas id="waveCanvas" width="264" height="60"></canvas>
+    </div>
+
+    <!-- Infinite Patch Space -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot" style="background:#fb923c"></span>
+        Infinite Patch Space
+      </div>
+      <p class="hint">No Math.random(). Every patch is a deterministic position in the ZeroByes hash-space. Share a single integer to share a sound.</p>
+      <button class="btn btn-accent" onclick="nextPatch()">◈ NEXT PATCH [<span id="patchCount">0</span>]</button>
+      <div class="patch-info" id="patchInfo" style="display:none">
+        <div class="patch-row"><span>Seed</span><span class="patch-val" id="pi-seed">—</span></div>
+        <div class="patch-row"><span>Wave</span><span class="patch-val" id="pi-wave">—</span></div>
+        <div class="patch-row"><span>Base Freq</span><span class="patch-val" id="pi-freq">—</span></div>
+        <div class="patch-row"><span>Bit Crush</span><span class="patch-val" id="pi-bits">—</span></div>
+        <div class="patch-row"><span>Duration</span><span class="patch-val" id="pi-dur">—</span></div>
+      </div>
+    </div>
+
+    <!-- ZB Compliance Verify -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot" style="background:#60a5fa"></span>
+        ZB Compliance Test
+      </div>
+      <p class="hint">Run determinism verification. Same seed must produce identical params every call.</p>
+      <button class="btn btn-green" onclick="runVerify()">▶ RUN VERIFY (33 SOUNDS)</button>
+      <div class="verify-list" id="verifyList" style="display:none"></div>
+    </div>
+
+    <!-- Derived Params Inspector -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot" style="background:#f472b6"></span>
+        Derived Params Inspector
+      </div>
+      <p class="hint" style="margin-bottom:4px">Click any sound to inspect its O(1) derived parameters.</p>
+      <div class="param-dump" id="paramDump">
+        <div class="param-row"><span class="p-key">—</span><span class="p-val">click a sound</span></div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- Category Filter -->
+    <div class="cat-bar" id="catBar"></div>
+
+    <!-- Sound Grid -->
+    <div class="sound-grid" id="soundGrid"></div>
+
+    <!-- ZB Laws -->
+    <div class="laws-grid">
+      <div class="law-card">
+        <div class="law-name">O(1) Access</div>
+        <div class="law-desc">Any param derived directly from (soundId, worldSeed) — no iteration over prior states</div>
+      </div>
+      <div class="law-card">
+        <div class="law-name">Parallelism</div>
+        <div class="law-desc">Each param hashes independently via its own slot k — no cross-param dependencies</div>
+      </div>
+      <div class="law-card">
+        <div class="law-name">Coherence</div>
+        <div class="law-desc">Adjacent sounds share a category seed — movement sounds stay movement-like across world seeds</div>
+      </div>
+      <div class="law-card">
+        <div class="law-name">Hierarchy</div>
+        <div class="law-desc">world → category → sound → param[k] → sample[n] — child inherits parent constraints</div>
+      </div>
+      <div class="law-card">
+        <div class="law-name">Determinism</div>
+        <div class="law-desc">Same (soundId, worldSeed) = identical synthesis params on every machine, every session</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ============================================================================
+// ZEROSOUNDS ENGINE — self-contained, no dependencies
+// ============================================================================
+
+// ── ZB HASH CORE ──────────────────────────────────────────────────────────
+function zbHash(key, seed) {
+  seed = (seed || 0) >>> 0;
+  let h = (seed ^ 0x9e3779b9) >>> 0;
+  if (typeof key === 'number') {
+    h ^= (key >>> 0);
+    h = Math.imul(h, 0xcc9e2d51) >>> 0;
+    h = ((h << 15) | (h >>> 17)) >>> 0;
+    h = Math.imul(h, 0x1b873593) >>> 0;
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b) >>> 0;
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35) >>> 0;
+    h ^= h >>> 16;
+    return h >>> 0;
+  }
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x5bd1e995) >>> 0;
+    h ^= h >>> 15;
+  }
+  return h >>> 0;
+}
+const zbFloat = h => (h & 0xFFFFFF) / 0x1000000;
+const zbRange = (h, mn, mx) => mn + zbFloat(h) * (mx - mn);
+const zbInt   = (h, mn, mx) => mn + (h % (mx - mn + 1));
+
+// ── TAXONOMY ──────────────────────────────────────────────────────────────
+const ZB_CATEGORIES = {
+  movement:    { index: 0, freqLow: 80,   freqHigh: 400,  durLow: 0.06, durHigh: 0.25 },
+  pickup:      { index: 1, freqLow: 500,  freqHigh: 1800, durLow: 0.12, durHigh: 0.5  },
+  combat:      { index: 2, freqLow: 100,  freqHigh: 1200, durLow: 0.06, durHigh: 0.5  },
+  explosion:   { index: 3, freqLow: 40,   freqHigh: 300,  durLow: 0.15, durHigh: 0.9  },
+  ui:          { index: 4, freqLow: 300,  freqHigh: 1000, durLow: 0.03, durHigh: 0.2  },
+  power:       { index: 5, freqLow: 200,  freqHigh: 1200, durLow: 0.3,  durHigh: 1.0  },
+  damage:      { index: 6, freqLow: 100,  freqHigh: 600,  durLow: 0.08, durHigh: 0.8  },
+  environment: { index: 7, freqLow: 80,   freqHigh: 600,  durLow: 0.06, durHigh: 0.5  },
+};
+
+const CATEGORY_COLORS = {
+  movement:'#4FC3F7', pickup:'#FFD54F', combat:'#EF5350', explosion:'#FF7043',
+  ui:'#AB47BC', power:'#66BB6A', damage:'#F06292', environment:'#26A69A',
+};
+
+const ZB_SOUNDS = {
+  jump:          { category:'movement',    style:0, styleIndex:0, label:'⬆ Jump'        },
+  doubleJump:    { category:'movement',    style:2, styleIndex:1, label:'⬆⬆ Dbl Jump'   },
+  dash:          { category:'movement',    style:1, styleIndex:2, label:'⚡ Dash'         },
+  land:          { category:'movement',    style:1, styleIndex:3, label:'⬇ Land'         },
+  coin:          { category:'pickup',      style:2, styleIndex:0, label:'🪙 Coin'         },
+  gem:           { category:'pickup',      style:2, styleIndex:1, label:'💎 Gem'          },
+  heart:         { category:'pickup',      style:2, styleIndex:2, label:'❤ Heart'         },
+  key:           { category:'pickup',      style:0, styleIndex:3, label:'🗝 Key'           },
+  laser:         { category:'combat',      style:0, styleIndex:0, label:'🔴 Laser'        },
+  blaster:       { category:'combat',      style:1, styleIndex:1, label:'💥 Blaster'      },
+  sword:         { category:'combat',      style:1, styleIndex:2, label:'⚔ Sword'         },
+  punch:         { category:'combat',      style:1, styleIndex:3, label:'👊 Punch'        },
+  magicSpell:    { category:'combat',      style:2, styleIndex:4, label:'✨ Magic'         },
+  explosion:     { category:'explosion',   style:1, styleIndex:0, label:'💣 Explosion'    },
+  smallExplosion:{ category:'explosion',   style:1, styleIndex:1, label:'💥 Pop'           },
+  boom:          { category:'explosion',   style:1, styleIndex:2, label:'💥 Boom'          },
+  menuSelect:    { category:'ui',          style:0, styleIndex:0, label:'▶ Select'         },
+  menuConfirm:   { category:'ui',          style:2, styleIndex:1, label:'✓ Confirm'        },
+  menuCancel:    { category:'ui',          style:0, styleIndex:2, label:'✗ Cancel'         },
+  pause:         { category:'ui',          style:0, styleIndex:3, label:'⏸ Pause'          },
+  textBlip:      { category:'ui',          style:0, styleIndex:4, label:'💬 Text'          },
+  powerUp:       { category:'power',       style:2, styleIndex:0, label:'⚡ Power Up'      },
+  levelUp:       { category:'power',       style:2, styleIndex:1, label:'🏆 Level Up'      },
+  oneUp:         { category:'power',       style:2, styleIndex:2, label:'1UP Extra'        },
+  heal:          { category:'power',       style:2, styleIndex:3, label:'💚 Heal'          },
+  hurt:          { category:'damage',      style:1, styleIndex:0, label:'💔 Hurt'          },
+  death:         { category:'damage',      style:2, styleIndex:1, label:'☠ Death'          },
+  enemyHit:      { category:'damage',      style:1, styleIndex:2, label:'🎯 Enemy Hit'     },
+  warning:       { category:'damage',      style:2, styleIndex:3, label:'⚠ Warning'        },
+  doorOpen:      { category:'environment', style:0, styleIndex:0, label:'🚪 Door'          },
+  chest:         { category:'environment', style:2, styleIndex:1, label:'📦 Chest'         },
+  splash:        { category:'environment', style:1, styleIndex:2, label:'💧 Splash'        },
+  teleport:      { category:'environment', style:0, styleIndex:3, label:'🌀 Teleport'      },
+  footstep:      { category:'environment', style:1, styleIndex:4, label:'👣 Footstep'      },
+};
+
+// ── ZB PARAM DERIVATION ───────────────────────────────────────────────────
+function zbDeriveParams(soundName, worldSeed) {
+  const sound = ZB_SOUNDS[soundName];
+  const cat   = ZB_CATEGORIES[sound.category];
+  const catSeed   = zbHash(cat.index, worldSeed);
+  const soundSeed = zbHash(sound.styleIndex, catSeed);
+  const h = k => zbHash(k, soundSeed);
+
+  const waveforms = sound.style === 1
+    ? ['noise','noise','sawtooth','square']
+    : sound.style === 2
+    ? ['square','square','sine','triangle']
+    : ['sine','square','sawtooth','triangle'];
+
+  const waveform   = waveforms[zbInt(h(0), 0, waveforms.length - 1)];
+  const baseFreq   = zbRange(h(1), cat.freqLow, cat.freqHigh);
+  const freqSweep  = zbRange(h(2), sound.style===1?0.1:0.8, sound.style===1?0.5:5.0);
+  const duration   = zbRange(h(3), cat.durLow, cat.durHigh);
+  const attackMax  = ['ui','combat'].includes(sound.category) ? 0.02 : 0.08;
+  const attack     = zbRange(h(4), 0.001, attackMax);
+  const decay      = zbRange(h(5), 0.02, 0.4);
+  const sustain    = zbRange(h(6), 0.05, 0.7);
+  const release    = zbRange(h(7), 0.01, 0.3);
+  const filterFreq = zbRange(h(8), 400, 8000);
+  const filterQ    = zbRange(h(9), 0.5, 6.0);
+  const useEcho    = zbFloat(h(10)) < (['environment','power','pickup'].includes(sound.category)?0.7:0.3);
+  const echoDelay  = useEcho ? zbRange(h(11), 0.04, 0.3) : 0;
+  const echoDecay  = useEcho ? zbRange(h(12), 0.1, 0.5) : 0;
+  const crushLow   = ['explosion','damage'].includes(sound.category) ? 2 : 8;
+  const crushHigh  = ['pickup','power'].includes(sound.category) ? 16 : 12;
+  const bitCrush   = zbInt(h(13), crushLow, crushHigh);
+
+  let arpeggio = null;
+  if (sound.style === 2) {
+    const noteCount = zbInt(h(14), 2, 6);
+    const notes = Array.from({length:noteCount}, (_,i) => {
+      const nh = zbHash(i, h(15));
+      return i===0 ? baseFreq : baseFreq * Math.pow(zbRange(nh,1.0,2.5), i);
+    });
+    arpeggio = { notes, speed: zbRange(h(16), 0.04, 0.12) };
+  }
+
+  const addNoise    = sound.style===1 && zbFloat(h(17)) > 0.3;
+  const noiseAmount = addNoise ? zbRange(h(18), 0.1, 0.5) : 0;
+  const addBass     = sound.category==='explosion' && zbFloat(h(19)) > 0.4;
+  const bassFreq    = addBass ? zbRange(h(20), 25, 80) : 0;
+
+  return { soundSeed, waveform, baseFreq, freqSweep, duration,
+           attack, decay, sustain, release, filterFreq, filterQ,
+           echoDelay, echoDecay, bitCrush, arpeggio, addNoise,
+           noiseAmount, addBass, bassFreq };
+}
+
+function zbRandomize(numericSeed, worldSeed) {
+  const vSeed  = zbHash(numericSeed, worldSeed);
+  const cats   = Object.keys(ZB_CATEGORIES);
+  const cat    = ZB_CATEGORIES[cats[zbInt(zbHash(0,vSeed), 0, cats.length-1)]];
+  const h      = k => zbHash(k, vSeed);
+  return {
+    soundSeed:   vSeed,
+    waveform:    ['sine','square','sawtooth','triangle','noise'][zbInt(h(0),0,4)],
+    baseFreq:    zbRange(h(1), cat.freqLow, cat.freqHigh),
+    freqSweep:   zbRange(h(2), 0.1, 5.0),
+    duration:    zbRange(h(3), cat.durLow, cat.durHigh),
+    attack:      zbRange(h(4), 0.001, 0.1),
+    decay:       zbRange(h(5), 0.01, 0.4),
+    sustain:     zbRange(h(6), 0.0, 0.8),
+    release:     zbRange(h(7), 0.01, 0.3),
+    filterFreq:  zbRange(h(8), 100, 8000),
+    filterQ:     zbRange(h(9), 0.1, 8.0),
+    echoDelay:   zbRange(h(10), 0, 0.3),
+    echoDecay:   zbRange(h(11), 0, 0.5),
+    bitCrush:    zbInt(h(12), 2, 16),
+    addNoise:    zbFloat(h(13)) > 0.7,
+    noiseAmount: zbRange(h(14), 0.1, 0.5),
+    arpeggio:    null,
+    addBass:     zbFloat(h(15)) > 0.85,
+    bassFreq:    zbRange(h(16), 25, 80),
+  };
+}
+
+// ── AUDIO ENGINE ──────────────────────────────────────────────────────────
+let audioCtx = null, masterGain = null, analyser = null;
+const noiseCache = new Map();
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.55;
+  masterGain.connect(audioCtx.destination);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  masterGain.connect(analyser);
+  startScope();
+}
+
+function resumeAudio() {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function buildNoiseBuffer(soundSeed) {
+  const sr  = audioCtx.sampleRate;
+  const len = sr * 2;
+  const buf = audioCtx.createBuffer(1, len, sr);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const h = zbHash(i, soundSeed ^ 0x5E5E5E5E);
+    d[i] = ((h & 1) * 2 - 1) * 0.5;
+  }
+  return buf;
+}
+
+function getNoiseBuffer(soundSeed) {
+  if (!noiseCache.has(soundSeed)) {
+    if (noiseCache.size >= 8) noiseCache.delete(noiseCache.keys().next().value);
+    noiseCache.set(soundSeed, buildNoiseBuffer(soundSeed));
+  }
+  return noiseCache.get(soundSeed);
+}
+
+function createBitCrusher(bits) {
+  const steps = Math.pow(2, bits);
+  const curve = new Float32Array(65536);
+  for (let i = 0; i < 65536; i++) {
+    const x = (i / 32768) - 1;
+    curve[i] = Math.round(x * steps) / steps;
+  }
+  const s = audioCtx.createWaveShaper();
+  s.curve = curve;
+  s.oversample = 'none';
+  return s;
+}
+
+function createPulseWave() {
+  const real = new Float32Array(32), imag = new Float32Array(32);
+  for (let n = 1; n < 32; n++) imag[n] = (2/(n*Math.PI)) * Math.sin(n*Math.PI*0.5);
+  return audioCtx.createPeriodicWave(real, imag, {disableNormalization:false});
+}
+
+function playParams(params) {
+  initAudio(); resumeAudio();
+  const now = audioCtx.currentTime;
+  if (params.arpeggio) { playArpeggio(params, now); return; }
+
+  let source;
+  if (params.waveform === 'noise') {
+    source = audioCtx.createBufferSource();
+    source.buffer = getNoiseBuffer(params.soundSeed || 0);
+    source.loop = true;
+  } else {
+    source = audioCtx.createOscillator();
+    if (params.waveform === 'square') source.setPeriodicWave(createPulseWave());
+    else source.type = params.waveform;
+    source.frequency.setValueAtTime(params.baseFreq, now);
+    if (params.freqSweep !== 1)
+      source.frequency.exponentialRampToValueAtTime(
+        Math.max(1, params.baseFreq * params.freqSweep), now + params.duration);
+  }
+
+  const filter  = audioCtx.createBiquadFilter();
+  filter.type   = 'lowpass';
+  filter.frequency.setValueAtTime(params.filterFreq, now);
+  filter.Q.value = params.filterQ;
+
+  const crusher = createBitCrusher(params.bitCrush || 8);
+
+  const gauss = audioCtx.createBiquadFilter();
+  gauss.type = 'lowpass'; gauss.frequency.value = 16000; gauss.Q.value = 0.5;
+
+  const env = audioCtx.createGain();
+  env.gain.setValueAtTime(0.0001, now);
+  env.gain.linearRampToValueAtTime(0.8, now + params.attack);
+  env.gain.setTargetAtTime(params.sustain*0.8, now+params.attack, params.decay/3);
+  env.gain.setTargetAtTime(0.0001, now+params.duration-params.release, params.release/3);
+
+  source.connect(filter); filter.connect(crusher); crusher.connect(gauss); gauss.connect(env);
+
+  if (params.addNoise && params.noiseAmount) {
+    const ns = audioCtx.createBufferSource();
+    ns.buffer = getNoiseBuffer((params.soundSeed||0) ^ 0xABCD1234); ns.loop = true;
+    const ng = audioCtx.createGain();
+    ng.gain.setValueAtTime(params.noiseAmount*0.5, now);
+    ng.gain.exponentialRampToValueAtTime(0.0001, now+params.duration);
+    const nf = audioCtx.createBiquadFilter();
+    nf.type='bandpass'; nf.frequency.value=params.baseFreq*2; nf.Q.value=1;
+    ns.connect(nf); nf.connect(ng); ng.connect(env);
+    ns.start(now); ns.stop(now+params.duration+0.1);
+  }
+
+  if (params.addBass && params.bassFreq) {
+    const bass = audioCtx.createOscillator();
+    bass.type='sine';
+    bass.frequency.setValueAtTime(params.bassFreq, now);
+    bass.frequency.exponentialRampToValueAtTime(20, now+params.duration*0.7);
+    const bg = audioCtx.createGain();
+    bg.gain.setValueAtTime(0.6, now);
+    bg.gain.exponentialRampToValueAtTime(0.0001, now+params.duration*0.8);
+    bass.connect(bg); bg.connect(masterGain);
+    bass.start(now); bass.stop(now+params.duration+0.1);
+  }
+
+  if (params.echoDelay > 0 && params.echoDecay > 0) {
+    const delay = audioCtx.createDelay(1);
+    delay.delayTime.value = params.echoDelay;
+    const fb = audioCtx.createGain(); fb.gain.value = params.echoDecay;
+    const wet = audioCtx.createGain(); wet.gain.value = 0.4;
+    delay.connect(fb); fb.connect(delay); delay.connect(wet);
+    env.connect(delay); wet.connect(masterGain);
+  }
+
+  env.connect(masterGain);
+  source.start(now); source.stop(now+params.duration+0.1);
+}
+
+function playArpeggio(params, now) {
+  params.arpeggio.notes.forEach((freq, i) => {
+    const t = now + i * params.arpeggio.speed;
+    const osc = audioCtx.createOscillator();
+    osc.type = params.waveform==='noise' ? 'square' : (params.waveform || 'square');
+    osc.frequency.setValueAtTime(freq, t);
+    const crush = createBitCrusher(params.bitCrush || 10);
+    const env   = audioCtx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(0.6, t+0.005);
+    env.gain.exponentialRampToValueAtTime(0.0001, t+params.arpeggio.speed*0.9);
+    osc.connect(crush); crush.connect(env); env.connect(masterGain);
+    osc.start(t); osc.stop(t+params.arpeggio.speed+0.05);
+  });
+}
+
+// ── OSCILLOSCOPE ──────────────────────────────────────────────────────────
+function startScope() {
+  const canvas = document.getElementById('waveCanvas');
+  const ctx2   = canvas.getContext('2d');
+  const buf    = new Uint8Array(analyser.fftSize);
+
+  function draw() {
+    requestAnimationFrame(draw);
+    analyser.getByteTimeDomainData(buf);
+    const W = canvas.width, H = canvas.height;
+    ctx2.clearRect(0,0,W,H);
+    ctx2.beginPath();
+    ctx2.strokeStyle = '#7c6cfa';
+    ctx2.lineWidth   = 1.5;
+    const step = W / buf.length;
+    buf.forEach((v, i) => {
+      const x = i * step;
+      const y = (v / 128) * (H/2);
+      i===0 ? ctx2.moveTo(x,y) : ctx2.lineTo(x,y);
+    });
+    ctx2.stroke();
+    // center line
+    ctx2.beginPath();
+    ctx2.strokeStyle = 'rgba(124,108,250,0.15)';
+    ctx2.lineWidth=1;
+    ctx2.moveTo(0,H/2); ctx2.lineTo(W,H/2);
+    ctx2.stroke();
+  }
+  draw();
+}
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let worldSeed    = 0x1337BEEF;
+let patchCounter = 0;
+let activeCategory = 'all';
+
+// ── UI INIT ───────────────────────────────────────────────────────────────
+const CATEGORY_ORDER = ['movement','pickup','combat','explosion','ui','power','damage','environment'];
+
+function buildCatBar() {
+  const bar = document.getElementById('catBar');
+  ['all', ...CATEGORY_ORDER].forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn' + (cat==='all' ? ' active' : '');
+    btn.textContent = cat.toUpperCase();
+    if (cat !== 'all') btn.style.borderColor = CATEGORY_COLORS[cat] + '66';
+    btn.onclick = () => {
+      activeCategory = cat;
+      document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      buildSoundGrid();
+    };
+    bar.appendChild(btn);
+  });
+}
+
+function buildSoundGrid() {
+  const grid = document.getElementById('soundGrid');
+  grid.innerHTML = '';
+  const sounds = Object.entries(ZB_SOUNDS)
+    .filter(([,s]) => activeCategory==='all' || s.category===activeCategory);
+
+  sounds.forEach(([name, soundDef], idx) => {
+    const color  = CATEGORY_COLORS[soundDef.category];
+    const params = zbDeriveParams(name, worldSeed);
+    const btn    = document.createElement('button');
+    btn.className = 'sound-btn';
+    btn.style.borderColor = color + '44';
+    btn.style.animationDelay = (idx * 18) + 'ms';
+
+    btn.innerHTML = `
+      <span class="s-label">${soundDef.label}</span>
+      <div class="s-meta">
+        <span class="s-cat" style="color:${color}bb">${soundDef.category}</span>
+        <span>${Math.round(params.baseFreq)}Hz</span>
+      </div>
+      <div class="s-wave">
+        <span>${params.waveform}</span>
+        <span>${params.bitCrush}bit</span>
+      </div>
+      ${params.arpeggio ? `<span class="arp-badge" style="background:${color}22;color:${color}">ARP</span>` : ''}
+    `;
+
+    btn.onclick = (e) => {
+      // Ripple
+      const r = document.createElement('div');
+      r.className = 'ripple';
+      const rect = btn.getBoundingClientRect();
+      r.style.left = (e.clientX - rect.left - 5) + 'px';
+      r.style.top  = (e.clientY - rect.top  - 5) + 'px';
+      r.style.color = color;
+      btn.appendChild(r);
+      setTimeout(() => r.remove(), 400);
+
+      // Flash active state
+      btn.classList.add('active');
+      btn.style.borderColor = color;
+      btn.style.background  = color + '22';
+      btn.style.boxShadow   = `0 0 20px ${color}44`;
+      btn.querySelector('.s-label').style.color = color;
+      setTimeout(() => {
+        btn.classList.remove('active');
+        btn.style.borderColor = color + '44';
+        btn.style.background  = '';
+        btn.style.boxShadow   = '';
+        btn.querySelector('.s-label').style.color = '';
+      }, 300);
+
+      playParams(params);
+      showParamDump(name, params);
+    };
+
+    grid.appendChild(btn);
+  });
+}
+
+function showParamDump(name, params) {
+  const dump = document.getElementById('paramDump');
+  const rows = Object.entries(params)
+    .filter(([k]) => !['arpeggio','soundSeed'].includes(k))
+    .map(([k,v]) => {
+      const isNum = typeof v === 'number';
+      return `<div class="param-row">
+        <span class="p-key">${k}</span>
+        <span class="p-val ${isNum ? 'highlight' : ''}">${isNum ? v.toFixed(3) : String(v)}</span>
+      </div>`;
+    });
+  if (params.arpeggio) {
+    rows.push(`<div class="param-row">
+      <span class="p-key">arp.notes</span>
+      <span class="p-val" style="font-size:8px">[${params.arpeggio.notes.map(n=>Math.round(n)).join(', ')}]</span>
+    </div>`);
+    rows.push(`<div class="param-row">
+      <span class="p-key">arp.speed</span>
+      <span class="p-val highlight">${params.arpeggio.speed.toFixed(3)}</span>
+    </div>`);
+  }
+  dump.innerHTML = rows.join('');
+}
+
+// ── CONTROLS ──────────────────────────────────────────────────────────────
+function updateSeedDisplay() {
+  const hex = '0x' + (worldSeed >>> 0).toString(16).toUpperCase().padStart(8,'0');
+  document.getElementById('headerSeed').textContent = hex;
+  document.getElementById('seedHexInput').value = hex;
+  document.getElementById('worldSeedSlider').value = worldSeed;
+
+  // Flash header seed
+  const hdr = document.getElementById('headerSeed');
+  hdr.classList.add('flash');
+  setTimeout(() => hdr.classList.remove('flash'), 200);
+}
+
+document.getElementById('worldSeedSlider').addEventListener('input', e => {
+  worldSeed = Number(e.target.value) >>> 0;
+  updateSeedDisplay();
+  buildSoundGrid();
+});
+
+document.getElementById('seedHexInput').addEventListener('change', e => {
+  const v = parseInt(e.target.value, 16);
+  if (!isNaN(v)) { worldSeed = v >>> 0; updateSeedDisplay(); buildSoundGrid(); }
+});
+
+document.getElementById('volSlider').addEventListener('input', e => {
+  const v = Number(e.target.value);
+  document.getElementById('volDisplay').textContent = Math.round(v*100) + '%';
+  if (masterGain) masterGain.gain.value = v;
+});
+
+function randomizeSeed() {
+  // Deterministic from current timestamp — still no Math.random()
+  worldSeed = zbHash(Date.now() & 0xFFFFFFFF, zbHash(performance.now()|0, 0x42)) >>> 0;
+  updateSeedDisplay();
+  buildSoundGrid();
+}
+
+function nextPatch() {
+  patchCounter++;
+  const p = zbRandomize(patchCounter, worldSeed);
+  playParams(p);
+
+  document.getElementById('patchCount').textContent = patchCounter;
+  document.getElementById('patchInfo').style.display = 'block';
+  document.getElementById('pi-seed').textContent = '0x'+(p.soundSeed>>>0).toString(16).toUpperCase();
+  document.getElementById('pi-wave').textContent = p.waveform;
+  document.getElementById('pi-freq').textContent = Math.round(p.baseFreq) + ' Hz';
+  document.getElementById('pi-bits').textContent = p.bitCrush + '-bit';
+  document.getElementById('pi-dur').textContent  = p.duration.toFixed(3) + 's';
+  showParamDump('rnd#'+patchCounter, p);
+}
+
+function runVerify() {
+  const list = document.getElementById('verifyList');
+  list.innerHTML = '';
+  list.style.display = 'block';
+  let allPass = true;
+
+  Object.keys(ZB_SOUNDS).forEach(name => {
+    const a = zbDeriveParams(name, worldSeed);
+    const b = zbDeriveParams(name, worldSeed);
+    const keys = Object.keys(a).filter(k => k !== 'soundSeed');
+    const mismatches = keys.filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+    const pass = mismatches.length === 0;
+    if (!pass) allPass = false;
+    const row = document.createElement('div');
+    row.className = 'verify-row';
+    row.innerHTML = `
+      <span style="opacity:0.7;font-size:9px">${name}</span>
+      <span class="${pass?'v-pass':'v-fail'}">${pass?'✓ PASS':'✗ FAIL'}</span>
+    `;
+    list.appendChild(row);
+  });
+
+  const summary = document.createElement('div');
+  summary.style.cssText = 'font-size:10px;padding:6px 0;border-top:1px solid var(--border);margin-top:4px;text-align:center;';
+  summary.style.color = allPass ? 'var(--green)' : 'var(--red)';
+  summary.textContent = allPass ? '✓ ALL 33 SOUNDS DETERMINISTIC' : '✗ VIOLATIONS FOUND';
+  list.appendChild(summary);
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
+buildCatBar();
+buildSoundGrid();
+updateSeedDisplay();
+
+// Tiny idle oscilloscope without audio context (show static)
+(function idleScope() {
+  const canvas = document.getElementById('waveCanvas');
+  const ctx2   = canvas.getContext('2d');
+  let t = 0;
+  function drawIdle() {
+    if (audioCtx) return; // real scope takes over
+    requestAnimationFrame(drawIdle);
+    ctx2.clearRect(0,0,canvas.width,canvas.height);
+    ctx2.beginPath();
+    ctx2.strokeStyle = 'rgba(124,108,250,0.3)';
+    ctx2.lineWidth = 1.5;
+    const W = canvas.width, H = canvas.height;
+    for (let i=0; i<W; i++) {
+      const x = i;
+      const y = H/2 + Math.sin((i/W)*Math.PI*6 + t)*4;
+      i===0 ? ctx2.moveTo(x,y) : ctx2.lineTo(x,y);
+    }
+    ctx2.stroke();
+    t += 0.04;
+  }
+  drawIdle();
+})();
+</script>
+</body>
+</html>
